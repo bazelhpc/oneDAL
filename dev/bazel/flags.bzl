@@ -19,7 +19,7 @@ lnx_cc_common_flags = [
     "-fstack-protector-strong",
     "-fno-strict-overflow",
     "-fno-delete-null-pointer-checks",
-    "-Werror",
+#    "-Werror",
     "-Wformat",
     "-Wformat-security",
     "-Wreturn-type",

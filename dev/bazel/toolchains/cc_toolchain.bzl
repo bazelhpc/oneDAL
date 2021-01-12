@@ -34,6 +34,8 @@ def _detect_requirements(repo_ctx):
         # TODO: Detect compiler version
         compiler_version = "local",
 
+        gcc_compiler_id = "gcc",
+
         # TODO: Detect DPC++ compiler, use $env{DPCC}
         dpc_compiler_id = "dpcpp",
 
@@ -55,6 +57,8 @@ onedal_cc_toolchain = repository_rule(
     implementation = _onedal_cc_toolchain_impl,
     environ = [
         "CC",
+        "PATH",
+        "CPATH",
         "PATH",
         "INCLUDE",
         "LIB",
