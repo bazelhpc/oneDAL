@@ -78,12 +78,14 @@ def _find_tools(repo_ctx, reqs):
     ar_path, _ = _find_tool(repo_ctx, "ar", mandatory=True)
     cc_path, _ = _find_tool(repo_ctx, reqs.compiler_id, mandatory=True)
     strip_path, _ = _find_tool(repo_ctx, "strip", mandatory=True)
+    gcc_path, gcc_found = _find_tool(repo_ctx, reqs.gcc_compiler_id, mandatory=False)
     dpcc_path, dpcpp_found = _find_tool(repo_ctx, reqs.dpc_compiler_id, mandatory=False)
     cc_link_path = _create_dynamic_link_wrapper(repo_ctx, "cc", cc_path)
     dpcc_link_path = _create_dynamic_link_wrapper(repo_ctx, "dpc", dpcc_path)
     ar_merge_path = _create_ar_merge_tool(repo_ctx, ar_path)
     return struct(
         cc           = cc_path,
+        gcc          = gcc_path,
         dpcc         = dpcc_path,
         cc_link      = cc_link_path,
         dpcc_link    = dpcc_link_path,
@@ -114,14 +116,14 @@ def _preapre_builtin_include_directory_paths(repo_ctx, tools):
             repo_ctx,
             tools.dpcc,
             "-xc++",
-            _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc),
+            _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools),
         ) +
         get_cxx_inc_directories(
             repo_ctx,
             tools.dpcc,
             "-xc++",
             get_no_canonical_prefixes_opt(repo_ctx, tools.dpcc) +
-            _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc),
+            _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools),
         )
 
     )
@@ -139,12 +141,11 @@ def _get_bin_search_flag(repo_ctx, cc_path):
         bin_search_flag = []
     return bin_search_flag
 
-def _get_gcc_toolchain_path(repo_ctx):
-    return str(repo_ctx.which("gcc").dirname.dirname.realpath)
-
-def _add_gcc_toolchain_if_needed(repo_ctx, cc):
+def _add_gcc_toolchain_if_needed(repo_ctx, cc, tools):
     if ("clang" in cc) or ("dpcpp" in cc):
-        return [ "--gcc-toolchain=" + _get_gcc_toolchain_path(repo_ctx) ]
+        return [ "--gcc-toolchain=" + "/".join(tools.gcc.split("/")[:-2]) ]
+    if ("icc" in cc):
+        return [ "-gcc-name=" + tools.gcc ]
     else:
         return []
 
@@ -196,6 +197,7 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
 
             # Tools
             "%{cc_path}":        tools.cc,
+	    "%{gcc_path}":       tools.gcc,
             "%{dpcc_path}":      tools.dpcc,
             "%{cc_link_path}":   tools.cc_link,
             "%{dpcc_link_path}": tools.dpcc_link,
@@ -205,7 +207,7 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
 
             "%{cxx_builtin_include_directories}": get_starlark_list(builtin_include_directories),
             "%{compile_flags_cc}": get_starlark_list(
-                _add_gcc_toolchain_if_needed(repo_ctx, tools.cc) +
+                _add_gcc_toolchain_if_needed(repo_ctx, tools.cc, tools) +
                 get_default_compiler_options(
                     repo_ctx,
                     reqs,
@@ -226,8 +228,22 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                     "-fdiagnostics-color=always",
                 )
             ),
+            "%{compile_flags_gcc}": get_starlark_list(
+                get_default_compiler_options(
+                    repo_ctx,
+                    reqs,
+                    tools.gcc,
+                    is_dpcc = False,
+                    category = "common",
+                ) +
+                add_compiler_option_if_supported(
+                    repo_ctx,
+                    tools.gcc,
+                    "-fdiagnostics-color=always",
+                )
+            ),
             "%{compile_flags_dpcc}": get_starlark_list(
-                _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc) +
+                _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools) +
                 get_default_compiler_options(
                     repo_ctx,
                     reqs,
@@ -250,6 +266,15 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                     category = "pedantic",
                 )
             ),
+            "%{compile_flags_pedantic_gcc}": get_starlark_list(
+                get_default_compiler_options(
+                    repo_ctx,
+                    reqs,
+                    tools.gcc,
+                    is_dpcc = False,
+                    category = "pedantic",
+                )
+            ),
             "%{compile_flags_pedantic_dpcc}": get_starlark_list(
                 get_default_compiler_options(
                     repo_ctx,
@@ -261,7 +286,7 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
             ) if tools.is_dpc_found else "",
             "%{cxx_flags}": get_starlark_list(cxx_opts),
             "%{link_flags_cc}": get_starlark_list(
-                _add_gcc_toolchain_if_needed(repo_ctx, tools.cc) +
+                _add_gcc_toolchain_if_needed(repo_ctx, tools.cc, tools) +
                 add_linker_option_if_supported(
                     repo_ctx,
                     tools.cc,
@@ -286,7 +311,7 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                 bin_search_flag_cc + link_opts
             ),
             "%{link_flags_dpcc}": get_starlark_list(
-                _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc) +
+                _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools) +
                 add_linker_option_if_supported(
                     repo_ctx,
                     tools.dpcc,
@@ -343,6 +368,9 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                 (get_no_canonical_prefixes_opt(repo_ctx, tools.cc)
                  if reqs.compiler_id != "icc" else [])
             ),
+            "%{no_canonical_system_headers_flags_gcc}": get_starlark_list(
+                get_no_canonical_prefixes_opt(repo_ctx, tools.gcc)
+            ),
             "%{no_canonical_system_headers_flags_dpcc}": get_starlark_list(
                 get_no_canonical_prefixes_opt(repo_ctx, tools.dpcc)
             ) if tools.is_dpc_found else "",
@@ -375,6 +403,9 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
             "%{supports_random_seed}": "False" if reqs.compiler_id == "icc" else "True",
             "%{cpu_flags_cc}": get_starlark_list_dict(
                 get_cpu_specific_options(reqs),
+            ),
+            "%{cpu_flags_gcc}": get_starlark_list_dict(
+                get_cpu_specific_options(reqs, is_gcc=True),
             ),
             "%{cpu_flags_dpcc}": get_starlark_list_dict(
                 get_cpu_specific_options(reqs, is_dpcc=True),

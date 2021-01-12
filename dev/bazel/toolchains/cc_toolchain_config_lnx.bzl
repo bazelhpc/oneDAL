@@ -87,14 +87,21 @@ def _impl(ctx):
     cc_tool = tool(
         path = ctx.attr.cc_path,
         with_features = [
-            with_feature_set(not_features = ["dpc++"])
+            with_feature_set(not_features = ["gcc", "dpc++"]),
         ]
+    )
+
+    gcc_tool = tool(
+	path = ctx.attr.gcc_path,
+	with_features = [
+            with_feature_set(features = ["gcc"], not_features=["dpc++"])
+	]
     )
 
     dpcc_tool = tool(
         path = ctx.attr.dpcc_path,
         with_features = [
-            with_feature_set(features = ["dpc++"]),
+            with_feature_set(features = ["dpc++"], not_features=["gcc"]),
         ],
     )
 
@@ -122,7 +129,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ cc_tool, dpcc_tool ],
+        tools = [ gcc_tool, cc_tool, dpcc_tool ],
     )
 
     preprocess_assemble_action = action_config(
@@ -135,7 +142,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ cc_tool, dpcc_tool ],
+        tools = [ gcc_tool, cc_tool, dpcc_tool ],
     )
 
     c_compile_action = action_config(
@@ -148,7 +155,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ cc_tool, dpcc_tool ],
+        tools = [ gcc_tool, cc_tool, dpcc_tool ],
     )
 
     cpp_compile_action = action_config(
@@ -161,7 +168,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ cc_tool, dpcc_tool ],
+        tools = [ gcc_tool, cc_tool, dpcc_tool ],
     )
 
     cpp_header_parsing_action = action_config(
@@ -174,7 +181,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ cc_tool, dpcc_tool ],
+        tools = [ gcc_tool, cc_tool, dpcc_tool ],
     )
 
     cpp_link_executable_action = action_config(
@@ -292,6 +299,10 @@ def _impl(ctx):
         cpp_merge_static_libraries_action,
         strip_action,
     ]
+
+    gcc_feature = feature(
+        name = "gcc",
+    )
 
     dpc_feature = feature(
         name = "dpc++",
@@ -436,7 +447,16 @@ def _impl(ctx):
                         flags = ctx.attr.compile_flags_cc,
                     ),
                 ] if ctx.attr.compile_flags_cc else []),
-                with_features = [with_feature_set(not_features = ["dpc++"])],
+                with_features = [with_feature_set(not_features = ["dpc++", "gcc"])],
+            ),
+            flag_set(
+                actions = all_compile_actions,
+                flag_groups = ([
+                    flag_group(
+                        flags = ctx.attr.compile_flags_gcc,
+                    ),
+                ] if ctx.attr.compile_flags_gcc else []),
+                with_features = [with_feature_set(features = ["gcc"])],
             ),
             flag_set(
                 actions = all_compile_actions,
@@ -644,7 +664,16 @@ def _impl(ctx):
                         flags = ctx.attr.no_canonical_system_headers_flags_cc,
                     ),
                 ] if ctx.attr.no_canonical_system_headers_flags_cc else []),
-                with_features = [with_feature_set(not_features = ["dpc++"])]
+                with_features = [with_feature_set(not_features = ["dpc++", "gcc"])]
+            ),
+            flag_set(
+                actions = all_compile_actions,
+                flag_groups = ([
+                    flag_group(
+                        flags = ctx.attr.no_canonical_system_headers_flags_gcc,
+                    ),
+                ] if ctx.attr.no_canonical_system_headers_flags_cc else []),
+                with_features = [with_feature_set(features = ["gcc"])]
             ),
             flag_set(
                 actions = all_compile_actions,
@@ -1094,6 +1123,7 @@ def _impl(ctx):
 
     features = []
     features.append(no_legacy_features_feature)
+    features.append(gcc_feature)
     features.append(dpc_feature)
     features.append(cxx11_feature)
     features.append(cxx14_feature)
@@ -1182,6 +1212,7 @@ cc_toolchain_config = rule(
         "abi_version": attr.string(mandatory = True),
         "abi_libc_version": attr.string(mandatory = True),
         "cc_path": attr.string(mandatory = True),
+        "gcc_path": attr.string(mandatory = True),
         "dpcc_path": attr.string(mandatory = True),
         "cc_link_path": attr.string(mandatory = True),
         "dpcc_link_path": attr.string(mandatory = True),
@@ -1190,8 +1221,10 @@ cc_toolchain_config = rule(
         "strip_path": attr.string(mandatory = True),
         "cxx_builtin_include_directories": attr.string_list(),
         "compile_flags_cc": attr.string_list(),
+        "compile_flags_gcc": attr.string_list(),
         "compile_flags_dpcc": attr.string_list(),
         "compile_flags_pedantic_cc": attr.string_list(),
+        "compile_flags_pedantic_gcc": attr.string_list(),
         "compile_flags_pedantic_dpcc": attr.string_list(),
         "dbg_compile_flags": attr.string_list(),
         "opt_compile_flags": attr.string_list(),
@@ -1201,11 +1234,13 @@ cc_toolchain_config = rule(
         "dynamic_link_libs": attr.string_list(),
         "opt_link_flags": attr.string_list(),
         "no_canonical_system_headers_flags_cc": attr.string_list(),
+        "no_canonical_system_headers_flags_gcc": attr.string_list(),
         "no_canonical_system_headers_flags_dpcc": attr.string_list(),
         "deterministic_compile_flags": attr.string_list(),
         "supports_start_end_lib": attr.bool(),
         "supports_random_seed": attr.bool(),
         "cpu_flags_cc": attr.string_list_dict(),
+        "cpu_flags_gcc": attr.string_list_dict(),
         "cpu_flags_dpcc": attr.string_list_dict(),
     },
     provides = [CcToolchainConfigInfo],
