@@ -33,6 +33,7 @@ cc_toolchain_config(
     abi_version = "%{abi_version}",
     abi_libc_version = "%{abi_libc_version}",
     cc_path = "%{cc_path}",
+    mpicc_path = "%{mpicc_path}",
     gcc_path = "%{gcc_path}",
     dpcc_path = "%{dpcc_path}",
     cc_link_path = "%{cc_link_path}",

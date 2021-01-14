@@ -77,6 +77,7 @@ def _find_tools(repo_ctx, reqs):
     # TODO: Use full compiler path from reqs
     ar_path, _ = _find_tool(repo_ctx, "ar", mandatory=True)
     cc_path, _ = _find_tool(repo_ctx, reqs.compiler_id, mandatory=True)
+    mpicc_path, _ = _find_tool(repo_ctx, "mpiicc", mandatory=True)
     strip_path, _ = _find_tool(repo_ctx, "strip", mandatory=True)
     gcc_path, gcc_found = _find_tool(repo_ctx, reqs.gcc_compiler_id, mandatory=False)
     dpcc_path, dpcpp_found = _find_tool(repo_ctx, reqs.dpc_compiler_id, mandatory=False)
@@ -85,6 +86,7 @@ def _find_tools(repo_ctx, reqs):
     ar_merge_path = _create_ar_merge_tool(repo_ctx, ar_path)
     return struct(
         cc           = cc_path,
+        mpicc        = mpicc_path,
         gcc          = gcc_path,
         dpcc         = dpcc_path,
         cc_link      = cc_link_path,
@@ -197,7 +199,8 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
 
             # Tools
             "%{cc_path}":        tools.cc,
-	    "%{gcc_path}":       tools.gcc,
+            "%{mpicc_path}":     tools.mpicc,
+            "%{gcc_path}":       tools.gcc,
             "%{dpcc_path}":      tools.dpcc,
             "%{cc_link_path}":   tools.cc_link,
             "%{dpcc_link_path}": tools.dpcc_link,

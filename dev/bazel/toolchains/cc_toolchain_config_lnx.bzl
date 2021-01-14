@@ -15,6 +15,8 @@
 #===============================================================================
 
 load("@bazel_tools//tools/cpp:cc_toolchain_config_lib.bzl",
+    "env_entry",
+    "env_set",
     "feature",
     "feature_set",
     "flag_group",
@@ -87,9 +89,18 @@ def _impl(ctx):
     cc_tool = tool(
         path = ctx.attr.cc_path,
         with_features = [
-            with_feature_set(not_features = ["gcc", "dpc++"]),
+            with_feature_set(not_features = ["gcc", "dpc++", "mpi"]),
         ]
     )
+    
+    mpi_tool = tool(
+	path = ctx.attr.mpicc_path,
+	with_features = [
+            with_feature_set(features = ["mpi"])
+	]
+    )
+
+    mpi_root = "/".join(ctx.attr.mpicc_path.split("/")[:-2])
 
     gcc_tool = tool(
 	path = ctx.attr.gcc_path,
@@ -108,7 +119,14 @@ def _impl(ctx):
     cc_link_tool = tool(
         path = ctx.attr.cc_link_path,
         with_features = [
-            with_feature_set(not_features = ["dpc++"])
+            with_feature_set(not_features = ["dpc++", "mpi"])
+        ]
+    )
+    
+    mpicc_link_tool = tool(
+        path = ctx.attr.mpicc_path,
+        with_features = [
+            with_feature_set(features = ["mpi"])
         ]
     )
 
@@ -129,7 +147,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ gcc_tool, cc_tool, dpcc_tool ],
+        tools = [ mpi_tool, gcc_tool, cc_tool, dpcc_tool ],
     )
 
     preprocess_assemble_action = action_config(
@@ -142,7 +160,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ gcc_tool, cc_tool, dpcc_tool ],
+        tools = [ mpi_tool, gcc_tool, cc_tool, dpcc_tool ],
     )
 
     c_compile_action = action_config(
@@ -155,7 +173,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ gcc_tool, cc_tool, dpcc_tool ],
+        tools = [ mpi_tool, gcc_tool, cc_tool, dpcc_tool ],
     )
 
     cpp_compile_action = action_config(
@@ -168,7 +186,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ gcc_tool, cc_tool, dpcc_tool ],
+        tools = [ mpi_tool, gcc_tool, cc_tool, dpcc_tool ],
     )
 
     cpp_header_parsing_action = action_config(
@@ -181,7 +199,7 @@ def _impl(ctx):
             "compiler_output_flags",
             "sysroot",
         ],
-        tools = [ gcc_tool, cc_tool, dpcc_tool ],
+        tools = [ mpi_tool, gcc_tool, cc_tool, dpcc_tool ],
     )
 
     cpp_link_executable_action = action_config(
@@ -199,7 +217,7 @@ def _impl(ctx):
             "sysroot",
             "default_dynamic_libraries",
         ],
-        tools = [ cc_link_tool, dpcc_link_tool ],
+        tools = [ mpicc_link_tool, cc_link_tool, dpcc_link_tool ],
     )
 
     cpp_link_nodeps_dynamic_library_action = action_config(
@@ -215,7 +233,7 @@ def _impl(ctx):
             "strip_debug_symbols",
             "sysroot",
         ],
-        tools = [ cc_link_tool, dpcc_link_tool ],
+        tools = [ mpicc_link_tool, cc_link_tool, dpcc_link_tool ],
     )
 
     cpp_link_dynamic_library_action = action_config(
@@ -233,7 +251,7 @@ def _impl(ctx):
             "sysroot",
             "default_dynamic_libraries",
         ],
-        tools = [ cc_link_tool, dpcc_link_tool ],
+        tools = [ mpicc_link_tool, cc_link_tool, dpcc_link_tool ],
     )
 
     cpp_link_static_library_action = action_config(
@@ -299,6 +317,10 @@ def _impl(ctx):
         cpp_merge_static_libraries_action,
         strip_action,
     ]
+
+    mpi_feature = feature(
+        name = "mpi",
+    )
 
     gcc_feature = feature(
         name = "gcc",
@@ -439,6 +461,16 @@ def _impl(ctx):
     default_compile_flags_feature = feature(
         name = "default_compile_flags",
         enabled = True,
+        env_sets = [
+            env_set(
+                actions = all_compile_actions,
+                env_entries = [
+                    env_entry("I_MPI_CC", ctx.attr.cc_path),
+                    env_entry("I_MPI_ROOT", mpi_root),
+                ],
+                with_features = [with_feature_set(features = ["mpi"])],
+            )
+        ],
         flag_sets = [
             flag_set(
                 actions = all_compile_actions,
@@ -448,6 +480,15 @@ def _impl(ctx):
                     ),
                 ] if ctx.attr.compile_flags_cc else []),
                 with_features = [with_feature_set(not_features = ["dpc++", "gcc"])],
+            ),
+            flag_set(
+                actions = all_compile_actions,
+                flag_groups = [
+                    flag_group(
+                        flags = ["-cc={}".format(ctx.attr.cc_path)],
+                    ),
+                ],
+                with_features = [with_feature_set(features = ["mpi"])],
             ),
             flag_set(
                 actions = all_compile_actions,
@@ -545,6 +586,16 @@ def _impl(ctx):
     default_link_flags_feature = feature(
         name = "default_link_flags",
         enabled = True,
+        env_sets = [
+            env_set(
+                actions = all_link_actions + lto_index_actions,
+                env_entries = [
+                    env_entry("I_MPI_CC", ctx.attr.cc_path),
+                    env_entry("I_MPI_ROOT", mpi_root),
+                ],
+                with_features = [with_feature_set(features = ["mpi"])],
+            )
+        ],
         flag_sets = [
             flag_set(
                 actions = all_link_actions + lto_index_actions,
@@ -554,6 +605,15 @@ def _impl(ctx):
                     ),
                 ] if ctx.attr.link_flags_cc else []),
                 with_features = [with_feature_set(not_features = ["dpc++"])],
+            ),
+            flag_set(
+                actions = all_link_actions + lto_index_actions,
+                flag_groups = [
+                    flag_group(
+                        flags = ["-cc={}".format(ctx.attr.cc_path)],
+                    ),
+                ],
+                with_features = [with_feature_set(features = ["mpi"])],
             ),
             flag_set(
                 actions = all_link_actions + lto_index_actions,
@@ -1124,6 +1184,7 @@ def _impl(ctx):
     features = []
     features.append(no_legacy_features_feature)
     features.append(gcc_feature)
+    features.append(mpi_feature)
     features.append(dpc_feature)
     features.append(cxx11_feature)
     features.append(cxx14_feature)
@@ -1212,6 +1273,7 @@ cc_toolchain_config = rule(
         "abi_version": attr.string(mandatory = True),
         "abi_libc_version": attr.string(mandatory = True),
         "cc_path": attr.string(mandatory = True),
+        "mpicc_path": attr.string(mandatory = True),
         "gcc_path": attr.string(mandatory = True),
         "dpcc_path": attr.string(mandatory = True),
         "cc_link_path": attr.string(mandatory = True),
