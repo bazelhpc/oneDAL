@@ -342,6 +342,30 @@ def _impl(ctx):
         name = "c++17",
     )
 
+    openmp_feature = feature(
+	name = "openmp",
+	flag_sets = [
+	    flag_set(
+		actions = all_compile_actions + all_link_actions + lto_index_actions,
+		flag_groups = [
+		    flag_group(
+			flags = [ "-qopenmp" ],
+		    ),
+		],
+		with_features = [with_feature_set(not_features = ["gcc"])],
+            ),
+	    flag_set(
+		actions = all_compile_actions + all_link_actions + lto_index_actions,
+		flag_groups = [
+		    flag_group(
+			flags = [ "-fopenmp" ],
+		    ),
+		],
+		with_features = [with_feature_set(features = ["gcc"])],
+            )
+	]
+    )
+
     pedantic_feature = feature(
         name = "pedantic",
     )
@@ -1189,6 +1213,7 @@ def _impl(ctx):
     features.append(cxx11_feature)
     features.append(cxx14_feature)
     features.append(cxx17_feature)
+    features.append(openmp_feature)
     features.append(pedantic_feature)
     features.append(dbg_feature)
     features.append(opt_feature)
