@@ -551,7 +551,7 @@ def _impl(ctx):
                 with_features = [with_feature_set(features = ["opt"])],
             ),
             flag_set(
-                actions = all_compile_actions,
+                actions = all_cpp_compile_actions,
                 flag_groups = [
                     flag_group(
                         flags = [ "-std=c++11" ],
@@ -560,7 +560,7 @@ def _impl(ctx):
                 with_features = [with_feature_set(features = ["c++11"])],
             ),
             flag_set(
-                actions = all_compile_actions,
+                actions = all_cpp_compile_actions,
                 flag_groups = [
                     flag_group(
                         flags = [ "-std=c++14" ],
@@ -569,7 +569,7 @@ def _impl(ctx):
                 with_features = [with_feature_set(features = ["c++14"])],
             ),
             flag_set(
-                actions = all_compile_actions,
+                actions = all_cpp_compile_actions,
                 flag_groups = [
                     flag_group(
                         flags = [ "-std=c++17" ],
