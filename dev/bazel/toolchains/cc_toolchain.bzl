@@ -36,6 +36,8 @@ def _detect_requirements(repo_ctx):
 
         gcc_compiler_id = "gcc",
 
+        sycl_compiler_id = "clang",
+
         # TODO: Detect DPC++ compiler, use $env{DPCC}
         dpc_compiler_id = "dpcpp",
 

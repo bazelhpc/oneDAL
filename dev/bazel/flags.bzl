@@ -77,7 +77,7 @@ def get_cpu_flags(arch_id, os_id, compiler_id):
         avx2       = ["-xCORE-AVX2"]
         avx512_mic = ["-xMIC-AVX512"]
         avx512     = ["-xCORE-AVX512", "-qopt-zmm-usage=high"]
-    elif compiler_id == "dpcpp":
+    elif compiler_id == "dpcpp" or compiler_id == "clang":
         sse2       = ["-march=nocona"]
         ssse3      = ["-march=core2"]
         sse42      = ["-march=nehalem"]

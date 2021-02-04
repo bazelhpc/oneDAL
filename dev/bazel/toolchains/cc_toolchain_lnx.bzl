@@ -80,21 +80,26 @@ def _find_tools(repo_ctx, reqs):
     mpicc_path, _ = _find_tool(repo_ctx, "mpiicc", mandatory=True)
     strip_path, _ = _find_tool(repo_ctx, "strip", mandatory=True)
     gcc_path, gcc_found = _find_tool(repo_ctx, reqs.gcc_compiler_id, mandatory=False)
+    sycl_path, sycl_found = _find_tool(repo_ctx, reqs.sycl_compiler_id, mandatory=False)
     dpcc_path, dpcpp_found = _find_tool(repo_ctx, reqs.dpc_compiler_id, mandatory=False)
     cc_link_path = _create_dynamic_link_wrapper(repo_ctx, "cc", cc_path)
+    sycl_link_path = _create_dynamic_link_wrapper(repo_ctx, "sycl", sycl_path)
     dpcc_link_path = _create_dynamic_link_wrapper(repo_ctx, "dpc", dpcc_path)
     ar_merge_path = _create_ar_merge_tool(repo_ctx, ar_path)
     return struct(
         cc           = cc_path,
         mpicc        = mpicc_path,
         gcc          = gcc_path,
+        sycl         = sycl_path,
         dpcc         = dpcc_path,
         cc_link      = cc_link_path,
+        sycl_link    = sycl_link_path,
         dpcc_link    = dpcc_link_path,
         strip        = strip_path,
         ar           = ar_path,
         ar_merge     = ar_merge_path,
         is_dpc_found = dpcpp_found,
+        is_sycl_found = sycl_found,
     )
 
 
@@ -126,6 +131,19 @@ def _preapre_builtin_include_directory_paths(repo_ctx, tools):
             "-xc++",
             get_no_canonical_prefixes_opt(repo_ctx, tools.dpcc) +
             _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools),
+        ) +
+        get_cxx_inc_directories(
+            repo_ctx,
+            tools.sycl,
+            "-xc++",
+            ["-fsycl"]+_add_gcc_toolchain_if_needed(repo_ctx, tools.sycl, tools),
+        ) +
+        get_cxx_inc_directories(
+            repo_ctx,
+            tools.sycl,
+            "-xc++",
+            ["-fsycl"]+get_no_canonical_prefixes_opt(repo_ctx, tools.sycl) +
+            _add_gcc_toolchain_if_needed(repo_ctx, tools.sycl, tools),
         )
 
     )
@@ -169,6 +187,7 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
 
     # Addition compile/link flags
     bin_search_flag_cc = _get_bin_search_flag(repo_ctx, tools.cc)
+    bin_search_flag_sycl = _get_bin_search_flag(repo_ctx, tools.sycl)
     bin_search_flag_dpcc = _get_bin_search_flag(repo_ctx, tools.dpcc)
 
     repo_ctx.template(
@@ -195,14 +214,17 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
             "%{linker_deps}": get_starlark_list([
                 ":" + paths.basename(tools.cc_link),
                 ":" + paths.basename(tools.dpcc_link),
+                ":" + paths.basename(tools.sycl_link),
             ]),
 
             # Tools
             "%{cc_path}":        tools.cc,
             "%{mpicc_path}":     tools.mpicc,
             "%{gcc_path}":       tools.gcc,
+            "%{sycl_path}":      tools.sycl,
             "%{dpcc_path}":      tools.dpcc,
             "%{cc_link_path}":   tools.cc_link,
+            "%{sycl_link_path}": tools.sycl_link,
             "%{dpcc_link_path}": tools.dpcc_link,
             "%{ar_path}":        tools.ar,
             "%{ar_merge_path}":  tools.ar_merge,
@@ -244,6 +266,31 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                     tools.gcc,
                     "-fdiagnostics-color=always",
                 )
+            ),            
+            "%{compile_flags_sycl}": get_starlark_list(
+                 _add_gcc_toolchain_if_needed(repo_ctx, tools.sycl, tools) +
+                get_default_compiler_options(
+                    repo_ctx,
+                    reqs,
+                    tools.sycl,
+                    is_dpcc = True,
+                    category = "common",
+                ) +
+                add_compiler_option_if_supported(
+                    repo_ctx,
+                    tools.cc,
+                    "-fdiagnostics-color=always",
+                ) +
+                add_compiler_option_if_supported(
+                    repo_ctx,
+                    tools.cc,
+                    "-fsycl",
+                ) +
+                add_compiler_option_if_supported(
+                    repo_ctx,
+                    tools.cc,
+                    "-fsycl-unnamed-lambda",
+                )
             ),
             "%{compile_flags_dpcc}": get_starlark_list(
                 _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools) +
@@ -275,6 +322,15 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                     reqs,
                     tools.gcc,
                     is_dpcc = False,
+                    category = "pedantic",
+                )
+            ),
+            "%{compile_flags_pedantic_sycl}": get_starlark_list(
+                get_default_compiler_options(
+                    repo_ctx,
+                    reqs,
+                    tools.sycl,
+                    is_dpcc = True,
                     category = "pedantic",
                 )
             ),
@@ -312,6 +368,28 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
                     [ "-no-cilk", "-static-intel", ] if reqs.compiler_id == "icc" else []
                 ) +
                 bin_search_flag_cc + link_opts
+            ),
+            "%{link_flags_sycl}": get_starlark_list(
+                _add_gcc_toolchain_if_needed(repo_ctx, tools.sycl, tools) +
+                add_linker_option_if_supported(
+                    repo_ctx,
+                    tools.sycl,
+                    "-Wl,-no-as-needed",
+                    "-no-as-needed",
+                ) +
+                add_linker_option_if_supported(
+                    repo_ctx,
+                    tools.sycl,
+                    "-Wl,-z,relro,-z,now",
+                    "-z",
+                ) +
+                add_compiler_option_if_supported(
+                    # Have gcc return the exit code from ld.
+                    repo_ctx,
+                    tools.sycl,
+                    "-pass-exit-codes",
+                ) +
+                bin_search_flag_sycl + link_opts
             ),
             "%{link_flags_dpcc}": get_starlark_list(
                 _add_gcc_toolchain_if_needed(repo_ctx, tools.dpcc, tools) +
@@ -374,6 +452,9 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
             "%{no_canonical_system_headers_flags_gcc}": get_starlark_list(
                 get_no_canonical_prefixes_opt(repo_ctx, tools.gcc)
             ),
+            "%{no_canonical_system_headers_flags_sycl}": get_starlark_list(
+                get_no_canonical_prefixes_opt(repo_ctx, tools.sycl)
+            ),
             "%{no_canonical_system_headers_flags_dpcc}": get_starlark_list(
                 get_no_canonical_prefixes_opt(repo_ctx, tools.dpcc)
             ) if tools.is_dpc_found else "",
@@ -409,6 +490,9 @@ def configure_cc_toolchain_lnx(repo_ctx, reqs):
             ),
             "%{cpu_flags_gcc}": get_starlark_list_dict(
                 get_cpu_specific_options(reqs, is_gcc=True),
+            ),
+            "%{cpu_flags_sycl}": get_starlark_list_dict(
+                get_cpu_specific_options(reqs, is_sycl=True),
             ),
             "%{cpu_flags_dpcc}": get_starlark_list_dict(
                 get_cpu_specific_options(reqs, is_dpcc=True),
