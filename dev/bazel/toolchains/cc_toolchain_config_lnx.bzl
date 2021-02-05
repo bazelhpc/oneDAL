@@ -370,7 +370,7 @@ def _impl(ctx):
 			flags = [ "-qopenmp" ],
 		    ),
 		],
-		with_features = [with_feature_set(not_features = ["gcc"])],
+		with_features = [with_feature_set(not_features = ["gcc","sycl"])],
             ),
 	    flag_set(
 		actions = all_compile_actions + all_link_actions + lto_index_actions,
